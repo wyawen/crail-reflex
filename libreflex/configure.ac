@@ -22,11 +22,11 @@ AC_ARG_WITH([jdk],
             [AC_ERROR([jdk directory not specified])])
 AC_SUBST([jdk])
 
-#AC_ARG_WITH([ix],
-#            [AS_HELP_STRING([--with-ix],[ix or reflex base directory])],
-#            [ix=$withval],
-#            [AC_ERROR([ix or reflex directory not specified])])
-#AC_SUBST([ix])
+AC_ARG_WITH([ix],
+            [AS_HELP_STRING([--with-ix],[ix or reflex base directory])],
+            [ix=$withval],
+            [AC_ERROR([ix or reflex directory not specified])])
+AC_SUBST([ix])
 
 AC_ARG_WITH([spdk],
             [AS_HELP_STRING([--with-spdk],[spdk base directory])],
