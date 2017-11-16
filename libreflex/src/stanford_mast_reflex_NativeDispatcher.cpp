@@ -12,17 +12,6 @@
 #include <cstring>
 #include <cerrno>
 #include <cstdlib>
-//#include <spdk/nvme.h>
-//#include <spdk/env.h>
-//#include <spdk/nvme_intel.h>
-//#include <spdk/pci_ids.h>
-
-
-// spdk is missing extern C in some headers
-//extern "C" {
-//#include <spdk/log.h>
-//#include <nvme_internal.h>
-//}
 
 #include <event2/listener.h>
 #include <event2/bufferevent.h>
@@ -232,7 +221,7 @@ struct pp_conn *conn;
 
 static struct mempool_datastore nvme_usr_datastore;
 static __thread struct mempool req_pool;
-static const int outstanding_reqs = 512; // 4096 * 8;
+static const int outstanding_reqs = 512; //*8; //512; // 4096 * 8;
 
 //fixme: hard-coding sector size for now
 static int ns_sector_size = 512;
@@ -251,18 +240,27 @@ JNIEXPORT void JNICALL Java_stanford_mast_reflex_NativeDispatcher__1hello_1refle
   (JNIEnv *env, jobject obj)
 {
 	printf("Hello ReFlex!\n");
-	
+}
+
+
+
+
 /*
-	running = true;
+ * Class:     stanford_mast_reflex_NativeDispatcher
+ * Method:    _close_connection
+ * Signature: ()V
+ */
+JNIEXPORT void JNICALL Java_stanford_mast_reflex_NativeDispatcher__1close_1connection
+  (JNIEnv *env, jobject obj)
+{
+        running = true;
         ixev_close(&conn->ctx);
 
         while (running)
                 ixev_wait();
-*/}
 
-
-
-
+        printf("Connection closed...\n");
+}
 
 
 // written data to socket
@@ -274,25 +272,13 @@ void write_cb(struct pp_conn *conn) {
 // read data from socket
 static void receive_req(struct pp_conn *conn)
 {
-printf("DEBUG> receive_req\n");
 	ssize_t ret;
 	struct nvme_req *req;
 	BINARY_HEADER* header;
 
-/*	//-----------------------
-        //1> return if received length is less than header length 
-	struct evbuffer *input = bufferevent_get_input(bev);
-        int length = evbuffer_get_length(input);
-
-	//2> copy header from the response to 'header'
-        binary_header_blk_t *header = new binary_header_blk_t;
-        evbuffer_copyout(input, header, sizeof(binary_header_blk_t));
-*/	//-----------------------
-	
 	while(1) {
 		//1> return if received length is less than header length
 		if(!conn->rx_pending) {
-printf("	conn->rx_pending=false\n");
 			ret = ixev_recv(&conn->ctx, &conn->data[conn->rx_received],
 					sizeof(BINARY_HEADER) - conn->rx_received); 
 			if (ret <= 0) {
@@ -320,7 +306,6 @@ printf("	conn->rx_pending=false\n");
 
 		// process read response
 		if (header->opcode == CMD_GET) {
-printf("	process read response\n");
 			//1> copy rest of response (data w/o header) to conn->data 
 			ret = ixev_recv(&conn->ctx,
 					&conn->data[conn->rx_received],
@@ -347,18 +332,6 @@ printf("	process read response\n");
 			memcpy(addr_ctx, &conn->data[sizeof(BINARY_HEADER)], datalen);
 
 
-/*			//-----------------------
- 			//2> return if received length is less than length of (header+data)
-			int datalen = header->lba_count * SECTOR_SIZE;
-			int total_length = sizeof(binary_header_blk_t) + datalen;
-			if (length < total_length) return;
-
-			//1> copy (data w/o header) to addr_ctx (req_handle -> used as nvme_req for libix ) 
-			void* addr_ctx = header->req_handle->data_handle;
-			evbuffer_drain(input, sizeof(binary_header_blk_t)); //remove header from input 
-			evbuffer_remove(input, addr_ctx, datalen); //Read data from an evbuffer and drain the bytes read.	
-*/			//-----------------------
-			
 			//3> increment num-compl
 			num_completions++;
 
@@ -371,17 +344,9 @@ printf("	process read response\n");
 			completed_array* ca = completion->completed;
 			ca->ids[ca->index++] = completion->id;
 
-/*			//-----------------------
-			//5> received more than one request, so process the rest
-			if (length > total_length){ //received more than one request, so process the rest
-				read_cb(bev, NULL);
-			}
-*/			//-----------------------
-			
 		}
 		// process write response 
 		else if (header->opcode == CMD_SET) {
-printf("	process write response\n");
 			num_completions++;
 
 			volatile io_completion* completion;
@@ -398,23 +363,16 @@ printf("	process write response\n");
 			return;
 		}
 
-		// //struct nvme_req *req 
-		//req = header->req_handle->req_handle;
 	
-		//mempool_free(&nvme_req_buf_pool, req->buf);
-printf("	free req, set rx_pending=false, rx_received=0\n");
 		mempool_free(&req_pool, req);
 		conn->rx_pending = false;
 		conn->rx_received = 0;	
 
 	}
 
-printf("done receive_req\n");
-	//delete header->req_handle; //??? done in libevent before returning from a CMD_GET response
 		
 }
 
-int use_list = 1;
 int send_pending_client_reqs(struct pp_conn *conn);
 
 static void main_handler(struct ixev_ctx *ctx, unsigned int reason)
@@ -422,34 +380,26 @@ static void main_handler(struct ixev_ctx *ctx, unsigned int reason)
         struct pp_conn *conn = container_of(ctx, struct pp_conn, ctx);
 
         if(reason == IXEVOUT) {
-printf("	IXEVOUT\n");
-                if(use_list) send_pending_client_reqs(conn);
-        	//write_cb(conn);
+                send_pending_client_reqs(conn);
 	}
         else if(reason == IXEVHUP) {
-printf("	IXEVHUP\n");
                 printf("Connection close 5\n");
                 ixev_close(ctx);
                 return;
         }
 
-printf("	IXEVIN\n");
         receive_req(conn);
 }
 
 int connected; 
 static void pp_dialed(struct ixev_ctx *ctx, long ret)
 {
-printf("	pp_dialed called\n");
 	connected = 1;	
 
         struct pp_conn *conn = container_of(ctx, struct pp_conn, ctx);
         unsigned long now = rdtsc();
         ixev_set_handler(&conn->ctx, IXEVIN | IXEVOUT | IXEVHUP, &main_handler);
         //running = true;
-        if (tid == 0){
-                printf("RqIOPS:\t IOPS:\t Avg:\t 10th:\t 20th:\t 30th:\t 40th:\t 50th:\t 60th:\t 70th:\t 80th:\t 90th:\t 95th:\t 99th:\t max:\t missed:\n");
-        }
 
         conn_opened++;
 
@@ -461,20 +411,17 @@ num_completions++;
 
 static void pp_release(struct ixev_ctx *ctx)
 {
-printf("        pp_release called\n");
 
         struct pp_conn *conn = container_of(ctx, struct pp_conn, ctx);
         conn_opened--;
         if(conn_opened==0)
                 printf("Tid: %lx All connections released handle %lx open conns still %i\n", pthread_self(), conn->ctx.handle, conn_opened);
         mempool_free(&pp_conn_pool, conn);
-        //terminate = true;
         running = false;
 }
 
 static struct ixev_ctx *pp_accept(struct ip_tuple *id)
 {
-printf("        pp_accept called\n");
 
         return NULL;
 }
@@ -519,7 +466,6 @@ JNIEXPORT void JNICALL Java_stanford_mast_reflex_NativeDispatcher__1connect
         pthread_barrier_init(&barrier, NULL, nr_threads);
 */
 
-//	printf(">>>debug: ip_addr=%ld, htonl(ip_addr)=%u\n", ip_addr, htonl(ip_addr));
 
 	// set up ip & port 
         for (int i = 0; i < nr_threads; i++) {
@@ -635,7 +581,6 @@ JNIEXPORT void JNICALL Java_stanford_mast_reflex_NativeDispatcher__1connect
 	flags = fcntl(STDIN_FILENO, F_GETFL, 0);
 	fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK);
 
-	//printf(">>>debug: calling ixev_dial\n");
 	ixev_dial(&conn->ctx, ip_tuple[0]); //opens a connection --> need to support multiple connections? (multi-threaded)
 
 	connected = 0; 
@@ -654,21 +599,10 @@ JNIEXPORT void JNICALL Java_stanford_mast_reflex_NativeDispatcher__1connect
 JNIEXPORT jint JNICALL Java_stanford_mast_reflex_NativeDispatcher__1poll
   (JNIEnv *env, jobject obj)
 {
-   	//printf("poll()\n");
-
-/*	struct worker *worker;
-   	int flags = 0;
-	
-	flags += EVLOOP_NONBLOCK;
-	worker = &workers[0]; //FIXME: should be cpu number
-*/   
 	num_completions = 0;	
-	//event_base_loop(worker->base, flags); --> update num_compl???
-	//printf("polling\n");
 	ixev_wait(); //wait for new events
 	return num_completions;
 }
-
 
 
 /*
@@ -676,43 +610,24 @@ JNIEXPORT jint JNICALL Java_stanford_mast_reflex_NativeDispatcher__1poll
  */
 int send_client_req(struct nvme_req *req)
 {
-printf("debug: send_client_req\n");
 //adapted from send_client_req(struct nvme_req *req)
-	//struct pp_conn *conn = req->conn; 	//only 1 global connection
 	int ret = 0;
 
-	//0> save info from java
-	//void* cb_data = reinterpret_cast<io_completion*>(compl_addr);
-    	//void* payload = reinterpret_cast<void*>(addr);
-
-	
+		
 	//1> set up header 
         binary_header_blk_t *header; 
 
 	if (!conn->tx_pending){
-printf("	setting up header\n");
 		header = (BINARY_HEADER *)&conn->data_send[0];
 		header->magic = sizeof(BINARY_HEADER); 
-		/*if (is_write){ 
-			header->opcode = CMD_SET;
-printf("DEBUG> submit_io write\n");
-		} else { 
-			header->opcode = CMD_GET;		
-printf("DEBUG> submit_io read\n");
-		}
-		header->lba = lba;
-		header->lba_count = count;
-		*/
 		header->opcode = req->cmd; //set in submit_io
 		header->lba = req->lba;    //set in submit_io
 		header->lba_count = req->lba_count; //set in submit_io
-		//header->req_handle = req; 
 		
 		header->req_handle = new completion;
        		header->req_handle->data_handle = (void *)req->payload;    //set in submit_io
         	header->req_handle->io_compl_addr = req->cb_data;  //set in submit_io
 
-printf("	conn->tx_sent=%lu, header_size=%lu\n", conn->tx_sent, sizeof(BINARY_HEADER));
 
 		//1.5> send header (copy header from conn->data_send to conn->ctx)
 		while (conn->tx_sent < sizeof(BINARY_HEADER)) {
@@ -721,7 +636,6 @@ printf("	conn->tx_sent=%lu, header_size=%lu\n", conn->tx_sent, sizeof(BINARY_HEA
 			if (ret == -EAGAIN){
 				return -1;
 			}
-printf("DEBUG> submit_io-send_client_req ixev_send\n");
 			if (ret < 0) {
 				if(!conn->nvme_pending) {
 					printf("Connection close 2\n");
@@ -740,18 +654,10 @@ printf("DEBUG> submit_io-send_client_req ixev_send\n");
 	ret = 0; //not needed?
 	
 	//2> add payload for write req 
-//	if (is_write){
 	if (req->cmd == CMD_SET) {
 		//2.5> send payload (copy payload data from 'payload' to conn->ctx)
-printf("	conn->tx_sent=%lu, payload_size=%u\n", conn->tx_sent, req->lba_count * ns_sector_size);
 		while (conn->tx_sent < req->lba_count * ns_sector_size) {
-printf("        conn->tx_sent=%lu, payload_size=%u\n", conn->tx_sent, req->lba_count * ns_sector_size);
-
-
 			//assert(header->lba_count * ns_sector_size);
-printf("DEBUG> submit_io-send_client_req ixev_send_zc\n");
-printf("        req->payload=%x\n ", req->payload);
-
 			ret = ixev_send_zc(&conn->ctx, &(req->payload[conn->tx_sent]),
 					   req->lba_count * ns_sector_size - conn->tx_sent); 
 			if (ret < 0) {
@@ -775,7 +681,6 @@ printf("        req->payload=%x\n ", req->payload);
 
 	conn->tx_sent = 0;
 	conn->tx_pending = false;
-printf("done submit_io-send_client_req\n");
 
 	return 0;
 }
@@ -784,30 +689,21 @@ printf("done submit_io-send_client_req\n");
 
 int send_pending_client_reqs(struct pp_conn *conn)
 {
-printf("debug: send_pending_client_reqs\n");
-       // int sent_reqs = 0;
-if(list_empty(&conn->pending_requests)) printf("	pending list empty\n");
         while(!list_empty(&conn->pending_requests)) {
                 int ret;
                 struct nvme_req *req = list_top(&conn->pending_requests, struct nvme_req, link);
-                //req->sent_time = rdtsc();
-printf("ix_client debug: send_pending_client_reqs calls send_client_req\n");
                 ret = send_client_req(req);
                 if(!ret) {
-                        //sent_reqs++;
                         list_pop(&conn->pending_requests, struct nvme_req, link);
                         conn->list_len--;
                 }
                 else{
-printf("ix_client debug: return from send_pending_client_reqs\n");
                         return ret;//sent_reqs;
                 }
         }
-        //return sent_reqs;
 	return 0; 
 }
 
-int n_req = 1;
 
 /*
  * Class:     stanford_mast_reflex_NativeDispatcher
@@ -817,11 +713,6 @@ int n_req = 1;
 JNIEXPORT jint JNICALL Java_stanford_mast_reflex_NativeDispatcher__1submit_1io
   (JNIEnv *env, jobject obj, jlong addr, jlong lba, jint count, jlong compl_addr, jboolean is_write)
 {
-
-printf("DEBUG> submit_io: count=%d, n_req=\n", count);
-
-if(use_list){
-printf("	use_list\n");
         //0> save info from java
         void* cb_data = reinterpret_cast<io_completion*>(compl_addr);
         void* payload = reinterpret_cast<void*>(addr);
@@ -829,57 +720,21 @@ printf("	use_list\n");
 	struct nvme_req *req;
 
 	req = (struct nvme_req *) mempool_alloc(&req_pool);
-	int r = 1;
 	while(!req){
-		printf("        req cannot be allocated %d\n", r);
-    		r++;
-                //return -1;
                 receive_req(conn);
-                //limited qd, if we run out of req, try again later??? what to do for crail? 
-               // break; ???
 		req = (struct nvme_req *) mempool_alloc(&req_pool);
 	}
 
-/*
-	req = (struct nvme_req *) mempool_alloc(&req_pool);
-        if (!req) {
-  		printf("	req cannot be allocated\n");
-		//return -1;
-	      	receive_req(conn);
-                //limited qd, if we run out of req, try again later??? what to do for crail? 
-               // break; ???
-       	}
-
-        req = (struct nvme_req *) mempool_alloc(&req_pool);
-        if (!req) {
-                printf("        req cannot be allocated\n");
-                //return -1;
-                receive_req(conn);
-                //limited qd, if we run out of req, try again later??? what to do for crail?            
-               // break; ???
-        }
-*/
 
  	req->lba = lba; 
         req->lba_count = count;
 	if (is_write){ 
        		req->cmd = CMD_SET;
-printf("DEBUG> submit_io write\n");
         } else { 
         	req->cmd = CMD_GET;               
-printf("DEBUG> submit_io read\n");
 	}
-/*
-	int size = count * ns_sector_size;
-	req->payload = (char*) malloc(sizeof(char) * size);
-	//req->payload = (char*)payload;
-	//memcpy(req->payload, (char*)payload, size);
-printf("	payload=%c, %x, %s\n", req->payload[65512], &(req->payload[65512]), req->payload);
-*/
-
 	req->payload = (char*) payload;
 	req->cb_data = cb_data;
-//printf("	java payload=%x addr=%x, req->payload=%x\n ", payload, addr, req->payload);
 
 	conn->list_len++;
         list_add_tail(&conn->pending_requests, &req->link);
@@ -888,161 +743,4 @@ printf("	payload=%c, %x, %s\n", req->payload[65512], &(req->payload[65512]), req
 
 	return 0;
 
-}else{
-
-//adapted from send_client_req(struct nvme_req *req)
-	//struct pp_conn *conn = req->conn; 	//only 1 global connection
-	int ret = 0;
-
-	//0> save info from java
-	void* cb_data = reinterpret_cast<io_completion*>(compl_addr);
-    	void* payload = reinterpret_cast<void*>(addr);
-
-	
-	//1> set up header 
-        binary_header_blk_t *header; 
-
-	if (!conn->tx_pending){
-		header = (BINARY_HEADER *)&conn->data_send[0];
-		header->magic = sizeof(BINARY_HEADER); 
-		if (is_write){ 
-			header->opcode = CMD_SET;
-printf("DEBUG> submit_io write\n");
-		} else { 
-			header->opcode = CMD_GET;		
-printf("DEBUG> submit_io read\n");
-		}
-		header->lba = lba;
-		header->lba_count = count;
-		//header->req_handle = req;
-		header->req_handle = new completion;
-       		header->req_handle->data_handle = payload;
-        	header->req_handle->io_compl_addr = cb_data;
-
-		//1.5> send header (copy header from conn->data_send to conn->ctx)
-		while (conn->tx_sent < sizeof(BINARY_HEADER)) {
-			ret = ixev_send(&conn->ctx, &conn->data_send[conn->tx_sent], //conn->data_send??
-					sizeof(BINARY_HEADER) - conn->tx_sent);
-			if (ret == -EAGAIN){
-				return -1;
-			}
-printf("DEBUG> submit_io ixev_send\n");
-			if (ret < 0) {
-				if(!conn->nvme_pending) {
-					printf("Connection close 2\n");
-					ixev_close(&conn->ctx);
-				}
-				//return -2;
-				printf("ret<0\n");
-				return 0;
-				ret = 0;
-			}
-			conn->tx_sent += ret;
-		}
-	
-		assert(conn->tx_sent==sizeof(BINARY_HEADER));
-		conn->tx_pending = true;
-		conn->tx_sent = 0;
-	}
-
-	ret = 0; //not needed?
-        
-	//2> add payload for write req 
-	if (is_write){
-		//2.5> send payload (copy payload data from 'payload' to conn->ctx)
-		while (conn->tx_sent < header->lba_count * ns_sector_size) {
-			assert(header->lba_count * ns_sector_size);
-printf("DEBUG> submit_io ixev_send_zc\n");
-			ret = ixev_send_zc(&conn->ctx, payload,
-					   header->lba_count * ns_sector_size - conn->tx_sent); 
-			if (ret < 0) {
-				if (ret == -EAGAIN){
-					//return -2;
-                                        printf("ret=-EAGAIN\n");
-                                        return 0; 
-                                }
-	
-				return -2;
-				if(!conn->nvme_pending) {
-					printf("Connection close 3\n");
-					ixev_close(&conn->ctx);
-				}
-				//return -2;
-				printf("ret<0\n");
-				return 0;
-			}
-			if(ret==0)
-				printf("fhmm ret is zero\n");
-
-			conn->tx_sent += ret;
-		}
-	}
-
-
-	conn->tx_sent = 0;
-	conn->tx_pending = false;
-printf("done submit_io\n");
-
-	return 0;
-}
-
-
-	//-------libevent-------------------
-/*	//0> save info from java 
-	struct worker *worker;
-	worker = &workers[0]; //FIXME: should be cpu number
-	int pkt_len = 0;
-    	int	ret = 0;
- 
-	void* cb_data = reinterpret_cast<io_completion*>(compl_addr);
-    	void* payload = reinterpret_cast<void*>(addr);
-
-
-	//1> set up header 
- 	binary_header_blk_t *header;
-	binary_header_blk_t* pkt = new binary_header_blk_t;
-	if (!pkt) {
-		printf("error: malloc for response pkt failed\n");
-		return -1;
-	}
-
-	header = (binary_header_blk_t *)&pkt[0];
-	header->magic = sizeof(binary_header_blk_t);
-	header->req_handle = new completion;
-	header->req_handle->data_handle = payload; 
-	header->req_handle->io_compl_addr = cb_data; 
-	header->lba = lba;
-	header->lba_count = count;
-
-	//2> differentiates read/write reqs 
-	if (is_write){
-		header->opcode = CMD_SET;
-		
-		//printf("submit_io: write\n");
-		//2.1 write header to bufferevent
-		pkt_len = sizeof(binary_header_blk_t);
-		ret = bufferevent_write(worker->bev, (void*) pkt, pkt_len);
-		if (ret != 0) {
-			printf("send response failed\n");
-		}
-		//2.2 write payload data for write request
-		pkt_len = count * SECTOR_SIZE;
-		ret = bufferevent_write(worker->bev, (void*) payload, pkt_len);
-		if (ret != 0) {
-			printf("send response failed\n");
-		}
-		return 0;
-	}
-
-	// else read request...
-	//printf("submit_io: read\n");
-	header->opcode = CMD_GET;
-	pkt_len = sizeof(binary_header_blk_t);
-	ret = bufferevent_write(worker->bev, (void*) pkt, pkt_len);
-	if (ret != 0) {
-		printf("send response failed\n");
-	}
-
-  return 0;
-*/
 }
