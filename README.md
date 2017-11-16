@@ -57,7 +57,7 @@ Set the classpath (with `-cp` option) to `/usr/local/lib:target/*`.
 
 ### Running Crail iobench 
 
-To run the crail benchmark using ReFlex as the storage tier, start up a ReFlex server, then clone [crail-deployment] (https://github.com/patrickstuedi/crail-deployment) to set up the namenode and datanode.  Run iobench after updating libreflex.so.  
+To run the crail benchmark using ReFlex as the storage tier, start up a ReFlex server, then clone [crail-deployment](https://github.com/patrickstuedi/crail-deployment) to set up the namenode and datanode.  Run iobench after updating libreflex.so.  
   
    ```
    cp /usr/local/lib/libreflex.so crail-deployment/crail-1.0/lib/
