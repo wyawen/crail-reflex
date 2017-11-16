@@ -43,6 +43,7 @@ public class NativeDispatcher {
 
 	/* ReFlex-libevent functions */
 	public native void _hello_reflex();
+	public native void _close_connection();
 	public native void _connect(long ip_addr, int port);
 	public native int _poll(); 
 	public native int _submit_io(long address, long lba, int count, long compl_addr, boolean write); 

@@ -69,6 +69,7 @@ public class ReFlexEndpointClient extends ReFlexClientBenchmark {
 		long lastNumProcessed = queueDepth;
 		for (long completed = 0; completed < iterations; completed += lastNumProcessed) {
 			for (int i = 0; i < lastNumProcessed && posted < iterations; i++) {
+				//System.out.println("DEBUG: i=" + i + " lastNumProcessed=" + lastNumProcessed + " posted=" + posted + " iterations=" + iterations);
 				ReFlexCommand command = commands[(int)processed[i]];
 				if (command.isPending() && !command.isDone()) {
 					throw new IOException("Was completed but is not done??");
@@ -98,6 +99,10 @@ public class ReFlexEndpointClient extends ReFlexClientBenchmark {
 		}
 		long end = System.nanoTime();
 		group.freeBuffer(buffer); 
+
+		// close the connection with the server 
+		endpoint.close_connection();
+
 		return end - start;
 	}
 

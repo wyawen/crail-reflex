@@ -33,6 +33,14 @@ JNIEXPORT void JNICALL Java_stanford_mast_reflex_NativeDispatcher__1hello_1refle
 
 /*
  * Class:     stanford_mast_reflex_NativeDispatcher
+ * Method:    _close_connection
+ * Signature: ()V
+ */
+JNIEXPORT void JNICALL Java_stanford_mast_reflex_NativeDispatcher__1close_1connection
+  (JNIEnv *, jobject);
+
+/*
+ * Class:     stanford_mast_reflex_NativeDispatcher
  * Method:    _connect
  * Signature: (JI)V
  */

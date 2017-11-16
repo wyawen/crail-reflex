@@ -49,6 +49,10 @@ public class ReFlexEndpoint {
 		nativeDispatcher._hello_reflex();
 	}
 
+        public void close_connection(){
+                nativeDispatcher._close_connection();
+        }
+
 	public void connect(URI uri) throws Exception {
 		if (open){
 			return;
@@ -107,7 +111,7 @@ public class ReFlexEndpoint {
 
 		if (ret != numCompleted) {
 			System.out.format("ReflexEndpoint (disni): processCompletions ret is %d and numCompleted is %d!\n", ret, numCompleted); 
-			
+			//numCompleted = ret; //hack: for connecting			
 		}
 
 		return numCompleted;

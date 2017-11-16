@@ -74,7 +74,9 @@ public abstract class ReFlexClientBenchmark {
 		AccessPattern accessPatternValue = AccessPattern.valueOf(line.getOptionValue("m"));
 		String str = line.getOptionValue("rw");
 		boolean write = false;
-		if (str.compareTo("write") == 0) {
+
+		if (str.compareTo("0") == 0) {
+		//if (str.compareTo("write") == 0) {
 			write = true;
 		}
 
