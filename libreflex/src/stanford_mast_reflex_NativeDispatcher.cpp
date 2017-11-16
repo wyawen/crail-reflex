@@ -221,7 +221,7 @@ struct pp_conn *conn;
 
 static struct mempool_datastore nvme_usr_datastore;
 static __thread struct mempool req_pool;
-static const int outstanding_reqs = 512; //*8; //512; // 4096 * 8;
+static const int outstanding_reqs = 512*8; //512; // 4096 * 8;
 
 //fixme: hard-coding sector size for now
 static int ns_sector_size = 512;
