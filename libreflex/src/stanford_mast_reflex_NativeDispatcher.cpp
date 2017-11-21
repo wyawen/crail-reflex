@@ -69,6 +69,7 @@ struct completion { //need to store data_handle and io_compl_addr
 	void* data_handle;
 	void* io_compl_addr;
 	struct ixev_nvme_req_ctx ctx;
+	void* request;
 };
 
 typedef struct __attribute__ ((__packed__)) {
@@ -86,7 +87,7 @@ struct nvme_req {
 	long handle;
     unsigned long sent_time;
     // nvme buffer to read/write data into
-    char buf[4096]; //FIXME: update for sgl
+    //char buf[4096]; //FIXME: update for sgl
   
     struct list_node link;	
     char* payload;
@@ -363,7 +364,7 @@ static void receive_req(struct pp_conn *conn)
 			return;
 		}
 
-	
+		req = (nvme_req*)header->req_handle->request;
 		mempool_free(&req_pool, req);
 		conn->rx_pending = false;
 		conn->rx_received = 0;	
@@ -627,7 +628,7 @@ int send_client_req(struct nvme_req *req)
 		header->req_handle = new completion;
        		header->req_handle->data_handle = (void *)req->payload;    //set in submit_io
         	header->req_handle->io_compl_addr = req->cb_data;  //set in submit_io
-
+		header->req_handle->request = req;
 
 		//1.5> send header (copy header from conn->data_send to conn->ctx)
 		while (conn->tx_sent < sizeof(BINARY_HEADER)) {
@@ -651,7 +652,6 @@ int send_client_req(struct nvme_req *req)
 		conn->tx_sent = 0;
 	}
 
-	ret = 0; //not needed?
 	
 	//2> add payload for write req 
 	if (req->cmd == CMD_SET) {
