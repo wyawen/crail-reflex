@@ -8,6 +8,8 @@
 Building the source requires [Apache Maven](http://maven.apache.org/) and [GNU/autotools](http://www.gnu.org/software/autoconf/autoconf.html) and Java version 8 or higher.
 To build Crail-ReFlex and its example programs, execute the following steps:
 
+1. Compile ReFlex as a shared library, see instructions in [ReFlex](https://github.com/wyawen/reflex/tree/sharedlib)
+
 1. Compile Crail, see instructions in [Crail README](https://github.com/zrlio/crail). You will first need to compile [DiSNI](https://github.com/zrlio/disni) and [DaRPC](https://github.com/zrlio/darpc).
 
 2. Obtain and compile the Java sources for Crail-ReFlex, copy jar to CRAIL\_HOME jars directory: 
